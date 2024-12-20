@@ -1,0 +1,23 @@
+{
+  "name": "gitbook-waku",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "waku dev --port 3001",
+    "build": "waku build",
+    "start": "waku start"
+  },
+  "dependencies": {
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "react-server-dom-webpack": "19.0.0",
+    "waku": "0.21.9"
+  },
+  "devDependencies": {
+    "@types/react": "19.0.1",
+    "@types/react-dom": "19.0.2",
+    "server-only": "^0.0.1",
+    "typescript": "^5.7.2"
+  }
+}
