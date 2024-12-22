@@ -1,8 +1,8 @@
-// import { Suspense } from 'react';
+import { Suspense } from 'react';
 import { createPages } from 'waku';
 import type { PathsForPages } from 'waku/router';
 
-// import SiteCatchAllLoading from './app/(site)/(content)/[[...pathname]]/loading';
+import SiteCatchAllLoading from './app/(site)/(content)/[[...pathname]]/loading';
 // import SiteCatchAllPage from './app/(site)/(content)/[[...pathname]]/page';
 // import SiteCatchAllNoteFound from './app/(site)/(content)/[[...pathname]]/not-found';
 // import SiteContentLayout from './app/(site)/(content)/layout';
@@ -26,22 +26,12 @@ const pages = createPages(async ({ createPage, createLayout }) => [
 
     createPage({
         render: 'dynamic',
-        path: '/foo/[pathname]',
+        path: '/[...pathname]',
         component: ({ pathname }) => (
-            <div>
+            <Suspense fallback={<SiteCatchAllLoading />}>
                 <h1>Hello GitBook-Waku</h1>
-                <p>/foo/{pathname}</p>
-            </div>
-        ),
-    }),
-    createPage({
-        render: 'dynamic',
-        path: '/bar/[...pathname]',
-        component: ({ pathname }) => (
-            <div>
-                <h1>Hello GitBook-Waku</h1>
-                <p>/bar/{pathname.join('/')}</p>
-            </div>
+                <p>/{pathname.join('/')}</p>
+            </Suspense>
         ),
     }),
     /*
@@ -55,13 +45,6 @@ const pages = createPages(async ({ createPage, createLayout }) => [
         ),
     }),
     */
-
-    // Custom Not Found page
-    createPage({
-        render: 'static',
-        path: '/404',
-        component: () => <h1>Not Found</h1>,
-    }),
 ]);
 
 declare module 'waku/router' {
@@ -73,4 +56,17 @@ declare module 'waku/router' {
     }
 }
 
-export default pages;
+// export default pages;
+
+// TEMP to disable ssr
+export default {
+    handleRequest: async (input: any, utils: any) => {
+        if (input.type === 'custom') {
+            return null; // no ssr
+        }
+        return pages.handleRequest(input, utils);
+    },
+    getBuildConfig: (utils: any) => {
+        return pages.getBuildConfig(utils);
+    },
+};
