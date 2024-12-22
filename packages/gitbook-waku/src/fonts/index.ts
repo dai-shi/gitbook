@@ -1,22 +1,38 @@
 import { CustomizationFont } from '@gitbook/api';
-import {
-    Inter,
-    Fira_Sans_Extra_Condensed,
-    IBM_Plex_Serif,
-    IBM_Plex_Mono,
-    Lato,
-    Merriweather,
-    Noto_Sans,
-    Open_Sans,
-    Overpass,
-    Poppins,
-    Raleway,
-    Roboto,
-    Roboto_Slab,
-    Source_Sans_3,
-    Ubuntu,
-} from 'next/font/google';
-import localFont from 'next/font/local';
+//import {
+//    Inter,
+//    Fira_Sans_Extra_Condensed,
+//    IBM_Plex_Serif,
+//    IBM_Plex_Mono,
+//    Lato,
+//    Merriweather,
+//    Noto_Sans,
+//    Open_Sans,
+//    Overpass,
+//    Poppins,
+//    Raleway,
+//    Roboto,
+//    Roboto_Slab,
+//    Source_Sans_3,
+//    Ubuntu,
+//} from 'next/font/google';
+//import localFont from 'next/font/local';
+const localFont = <T extends object>(x: T) => x;
+const Inter = localFont;
+const Fira_Sans_Extra_Condensed = localFont;
+const IBM_Plex_Serif = localFont;
+const IBM_Plex_Mono = localFont;
+const Lato = localFont;
+const Merriweather = localFont;
+const Noto_Sans = localFont;
+const Open_Sans = localFont;
+const Overpass = localFont;
+const Poppins = localFont;
+const Raleway = localFont;
+const Roboto = localFont;
+const Roboto_Slab = localFont;
+const Source_Sans_3 = localFont;
+const Ubuntu = localFont;
 
 /*
     Fonts are downloaded and loaded by next/font.

@@ -1,6 +1,11 @@
-import { headers } from 'next/headers';
-
 import { SiteContentPointer, SpaceContentPointer } from './api';
+
+//import { headers } from 'next/headers';
+import { unstable_getHeaders as getHeaders } from 'waku/server';
+const headers = () => {
+    const obj = getHeaders();
+    return new Map(Object.entries(obj));
+};
 
 /**
  * Get the current site content pointer from the headers

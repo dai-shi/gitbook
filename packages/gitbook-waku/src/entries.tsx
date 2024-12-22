@@ -6,7 +6,7 @@ import SiteCatchAllLoading from './app/(site)/(content)/[[...pathname]]/loading'
 // import SiteCatchAllPage from './app/(site)/(content)/[[...pathname]]/page';
 // import SiteCatchAllNoteFound from './app/(site)/(content)/[[...pathname]]/not-found';
 // import SiteContentLayout from './app/(site)/(content)/layout';
-// import SiteLayout from './app/(site)/layout';
+import SiteLayout from './app/(site)/layout';
 // import SiteError from './app/(site)/error';
 // import SiteFetch from './app/(site)/fetch';
 
@@ -14,15 +14,8 @@ const pages = createPages(async ({ createPage, createLayout }) => [
     createLayout({
         render: 'dynamic',
         path: '/',
-        component: ({ children }) => <>{children}</>,
-    }),
-    /*
-    createLayout({
-        render: 'dynamic',
-        path: '/',
         component: ({ children }) => <SiteLayout>{children}</SiteLayout>,
     }),
-    */
 
     createPage({
         render: 'dynamic',

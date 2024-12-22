@@ -1,4 +1,3 @@
-
 import { getEmojiForCode } from '@/lib/emojis';
 import { ClassValue, tcls } from '@/lib/tailwind';
 
