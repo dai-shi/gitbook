@@ -1034,6 +1034,7 @@ const gitbookMiddleware: Middleware = () => {
                 for (const [key, value] of response.reqHeaders) {
                     // FIXME waku should support rewriting url
                     (ctx.req as any).headers[key] = value;
+                    reqHeaders.set(key, value);
                 }
             }
             await next();
