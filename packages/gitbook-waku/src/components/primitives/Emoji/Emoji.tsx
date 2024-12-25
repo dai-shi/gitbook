@@ -1,7 +1,8 @@
+// import localFont from 'next/font/local';
+
 import { getEmojiForCode } from '@/lib/emojis';
 import { ClassValue, tcls } from '@/lib/tailwind';
 
-// import localFont from 'next/font/local';
 const localFont = <T extends object>(x: T) => x;
 
 /** 

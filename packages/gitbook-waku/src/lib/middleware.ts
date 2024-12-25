@@ -1,19 +1,38 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
+type ReqResHeaders = {
+    req: Headers;
+    res: Headers;
+};
+
+/**
+ * Get headers on the "request".
+ */
+export function getMiddlewareHeaders() {
+    const reqresHeadersLocalStorage =
+        // @ts-ignore
+        globalThis.reqresHeadersLocalStorage as AsyncLocalStorage<ReqResHeaders> | undefined;
+    const headers = reqresHeadersLocalStorage?.getStore();
+    if (!headers) {
+        throw new Error('getMiddlewareHeaders is called without storage');
+    }
+    return headers.req;
+}
+
 /**
  * Set a header on the middleware response.
  * We do this because of https://github.com/opennextjs/opennextjs-cloudflare/issues/92
  * It can be removed as soon as we move to opennext where hopefully this is fixed.
  */
-export function setMiddlewareHeader(response: Response, name: string, value: string) {
-    const responseHeadersLocalStorage =
+export function setMiddlewareHeader(response: { headers: Headers }, name: string, value: string) {
+    const reqresHeadersLocalStorage =
         // @ts-ignore
-        globalThis.responseHeadersLocalStorage as AsyncLocalStorage<Headers> | undefined;
-    const responseHeaders = responseHeadersLocalStorage?.getStore();
+        globalThis.reqresHeadersLocalStorage as AsyncLocalStorage<ReqResHeaders> | undefined;
+    const headers = reqresHeadersLocalStorage?.getStore();
     response.headers.set(name, value);
 
-    if (responseHeaders) {
-        responseHeaders.set(name, value);
+    if (headers) {
+        headers.res.set(name, value);
     }
 }
 
@@ -23,15 +42,19 @@ export function setMiddlewareHeader(response: Response, name: string, value: str
 export async function withMiddlewareHeadersStorage(
     handler: () => Promise<Response>,
 ): Promise<Response> {
-    const responseHeadersLocalStorage =
+    const reqresHeadersLocalStorage =
         // @ts-ignore
-        (globalThis.responseHeadersLocalStorage as AsyncLocalStorage<Headers>) ??
-        new AsyncLocalStorage<Headers>();
+        (globalThis.reqresHeadersLocalStorage as AsyncLocalStorage<ReqResHeaders>) ??
+        new AsyncLocalStorage<ReqResHeaders>();
     // @ts-ignore
-    globalThis.responseHeadersLocalStorage = responseHeadersLocalStorage;
+    globalThis.reqresHeadersLocalStorage = reqresHeadersLocalStorage;
 
+    const requestHeaders = new Headers();
     const responseHeaders = new Headers();
-    const response = await responseHeadersLocalStorage.run(responseHeaders, handler);
+    const response = await reqresHeadersLocalStorage.run(
+        { req: requestHeaders, res: responseHeaders },
+        handler,
+    );
 
     for (const [name, value] of responseHeaders.entries()) {
         response.headers.set(name, value);

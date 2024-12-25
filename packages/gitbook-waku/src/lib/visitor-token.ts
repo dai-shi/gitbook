@@ -1,4 +1,5 @@
-import type { NextRequest } from 'next/server';
+// import type { NextRequest } from 'next/server';
+import type { NextRequest } from '../middleware/gitbook';
 import hash from 'object-hash';
 
 const VISITOR_AUTH_PARAM = 'jwt_token';

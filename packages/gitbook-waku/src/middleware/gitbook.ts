@@ -1,6 +1,12 @@
-import type { Middleware } from 'waku/config';
 import { ContentAPITokenPayload, GitBookAPI } from '@gitbook/api';
+// import { setTag, setContext } from '@sentry/nextjs';
 import assertNever from 'assert-never';
+import jwt from 'jsonwebtoken';
+// import type { ResponseCookie } from 'next/dist/compiled/@edge-runtime/cookies';
+// import { NextResponse, NextRequest } from 'next/server';
+import hash from 'object-hash';
+
+import type { Middleware } from 'waku/config';
 
 import {
     PublishedContentWithCache,
@@ -14,9 +20,13 @@ import {
     getPublishedContentSite,
     getSiteData,
 } from '@/lib/api';
+import { race } from '@/lib/async';
+import { buildVersion } from '@/lib/build';
+import { createContentSecurityPolicyNonce, getContentSecurityPolicy } from '@/lib/csp';
 import {
     getURLLookupAlternatives,
     normalizeURL,
+    getMiddlewareHeaders,
     setMiddlewareHeader,
     withMiddlewareHeadersStorage,
 } from '@/lib/middleware';
@@ -27,9 +37,16 @@ import {
     getVisitorToken,
     normalizeVisitorAuthURL,
 } from '@/lib/visitor-token';
-import { buildVersion } from '@/lib/build';
-import { createContentSecurityPolicyNonce, getContentSecurityPolicy } from '@/lib/csp';
-import { waitUntil } from '@/lib/waitUntil';
+
+import { waitUntil } from '../lib/waitUntil';
+
+/*
+export const config = {
+    matcher:
+        '/((?!_next/static|_next/image|~gitbook/revalidate|~gitbook/image|~gitbook/monitoring|~gitbook/static|~scalar/proxy).*)',
+    skipTrailingSlashRedirect: true,
+};
+*/
 
 type URLLookupMode =
     /**
@@ -75,228 +92,239 @@ export type LookupResult = PublishedContentWithCache & {
     cookies?: LookupCookies;
 };
 
-const gitbookMiddleware: Middleware = () => {
-    return async (ctx, next) => {
-        const { url, mode } = getInputURL(ctx.req);
+/**
+ * Middleware to lookup the site to render.
+ * It takes as input a request with an URL, and a set of headers:
+ *   - x-gitbook-api: the API endpoint to use, if undefined, the default one is used
+ *   - x-gitbook-basepath: base in the path that should be ignored for routing
+ *
+ * Once the site has been looked-up, the middleware passes the info to the rendering
+ * using a rewrite with a set of headers. This is the only way in next.js to do this (basically similar to AsyncLocalStorage).
+ *
+ * The middleware also takes care of persisting the visitor authentication state.
+ */
+async function middleware(request: NextRequest) {
+    const { url, mode } = getInputURL(request);
 
-        // Redirect to normalize the URL
-        const normalized = normalizeURL(url);
-        if (normalized.toString() !== url.toString()) {
-            ctx.res.status = 307;
-            ctx.res.headers ||= {};
-            ctx.res.headers.location = normalized.toString();
-            return;
-        }
+    // setTag('url', url.toString());
+    // setContext('request', {
+    //     method: request.method,
+    //     url: url.toString(),
+    //     rawRequestURL: request.url,
+    //     userAgent: userAgent(),
+    // });
 
-        // The API endpoint can be passed as a header, making it possible to use the same GitBook Open target
-        // accross multiple GitBook instances.
-        let apiEndpoint = ctx.req.headers['x-gitbook-api'] ?? DEFAULT_API_ENDPOINT;
-        const originBasePath = ctx.req.headers['x-gitbook-basepath'] ?? '';
+    // Redirect to normalize the URL
+    const normalized = normalizeURL(url);
+    if (normalized.toString() !== url.toString()) {
+        return NextResponse.redirect(normalized.toString());
+    }
 
-        const inputURL = mode === 'proxy' ? url : stripURLBasePath(url, originBasePath);
+    // The API endpoint can be passed as a header, making it possible to use the same GitBook Open target
+    // accross multiple GitBook instances.
+    let apiEndpoint = request.headers.get('x-gitbook-api') ?? DEFAULT_API_ENDPOINT;
+    const originBasePath = request.headers.get('x-gitbook-basepath') ?? '';
 
-        const resolved = await withAPI(
-            {
-                client: new GitBookAPI({
-                    endpoint: apiEndpoint,
-                    authToken: getDefaultAPIToken(apiEndpoint),
-                    userAgent: userAgent(),
-                }),
-                contextId: undefined,
+    const inputURL = mode === 'proxy' ? url : stripURLBasePath(url, originBasePath);
+
+    const resolved = await withAPI(
+        {
+            client: new GitBookAPI({
+                endpoint: apiEndpoint,
+                authToken: getDefaultAPIToken(apiEndpoint),
+                userAgent: userAgent(),
+            }),
+            contextId: undefined,
+        },
+        () => lookupSiteForURL(mode, request, inputURL),
+    );
+    if ('error' in resolved) {
+        return new NextResponse(resolved.error.message, {
+            status: resolved.error.code,
+            headers: {
+                'x-gitbook-version': buildVersion(),
             },
-            () => lookupSiteForURL(mode, ctx.req, inputURL),
-        );
-        if ('error' in resolved) {
-            ctx.res.status = resolved.error.code;
-            ctx.res.body = stringToStream(resolved.error.message);
-            ctx.res.headers ||= {};
-            ctx.res.headers['x-gitbook-version'] = buildVersion();
-            return;
-        }
-
-        if ('redirect' in resolved) {
-            console.log(`redirecting (${resolved.target}) to ${resolved.redirect}`);
-            return writeCookies(NextResponse.redirect(resolved.redirect), resolved.cookies);
-        }
-
-        // Make sure the URL is clean of any va token after a successful lookup
-        // The token is stored in a cookie that is set on the redirect response
-        const normalizedVA = normalizeVisitorAuthURL(normalized);
-        if (normalizedVA.toString() !== normalized.toString()) {
-            console.log(`redirecting to ${normalizedVA.toString()}`);
-            return writeCookies(NextResponse.redirect(normalizedVA.toString()), resolved.cookies);
-        }
-
-        // Because of how Next will encode, we need to encode ourselves the pathname before rewriting to it.
-        const rewritePathname = normalizePathname(encodePathname(resolved.pathname));
-
-        console.log(`${ctx.req.method} (${resolved.space}) ${rewritePathname}`);
-
-        // Resolution might have changed the API endpoint
-        apiEndpoint = resolved.apiEndpoint ?? apiEndpoint;
-
-        const contextId = 'site' in resolved ? resolved.contextId : undefined;
-        const nonce = createContentSecurityPolicyNonce();
-        const csp = await withAPI(
-            {
-                client: new GitBookAPI({
-                    endpoint: apiEndpoint,
-                    authToken: resolved.apiToken,
-                    userAgent: userAgent(),
-                }),
-                contextId,
-            },
-            async () => {
-                const [siteData] = await Promise.all([
-                    'site' in resolved
-                        ? getSiteData({
-                              organizationId: resolved.organization,
-                              siteId: resolved.site,
-                              siteSectionId: resolved.siteSection,
-                              siteSpaceId: resolved.siteSpace,
-                              siteShareKey: resolved.shareKey,
-                          })
-                        : null,
-                    // Start fetching everything as soon as possible, but do not block the middleware on it
-                    // the cache will handle concurrent calls
-                    waitUntil(
-                        getSpaceContentData(
-                            {
-                                spaceId: resolved.space,
-                                changeRequestId: resolved.changeRequest,
-                                revisionId: resolved.revision,
-                            },
-                            'site' in resolved ? resolved.shareKey : undefined,
-                        ),
-                    ),
-                ]);
-
-                const scripts = siteData?.scripts ?? [];
-                return getContentSecurityPolicy(scripts, nonce);
-            },
-        );
-
-        const headers = new Headers(request.headers);
-        // https://nextjs.org/docs/app/building-your-application/configuring/content-security-policy
-        headers.set('x-nonce', nonce);
-        headers.set('content-security-policy', csp);
-        // Pass a x-forwarded-host and origin to ensure Next doesn't block server actions when proxied
-        headers.set('x-forwarded-host', inputURL.host);
-        headers.set('origin', inputURL.origin);
-        headers.set('x-gitbook-token', resolved.apiToken);
-        if (contextId) {
-            headers.set('x-gitbook-token-context', contextId);
-        }
-        headers.set('x-gitbook-mode', mode);
-        headers.set('x-gitbook-origin-basepath', originBasePath);
-        headers.set(
-            'x-gitbook-basepath',
-            mode === 'proxy' ? originBasePath : joinPath(originBasePath, resolved.basePath),
-        );
-        headers.set('x-gitbook-content-space', resolved.space);
-        if ('site' in resolved) {
-            headers.set('x-gitbook-content-organization', resolved.organization);
-            headers.set('x-gitbook-content-site', resolved.site);
-            if (resolved.siteSection) {
-                headers.set('x-gitbook-content-site-section', resolved.siteSection);
-            }
-            if (resolved.siteSpace) {
-                headers.set('x-gitbook-content-site-space', resolved.siteSpace);
-            }
-            if (resolved.shareKey) {
-                headers.set('x-gitbook-content-site-share-key', resolved.shareKey);
-            }
-        }
-
-        // For tests, we make it possible to enable search indexation
-        // using a query parameter.
-        const xGitBookSearchIndexation =
-            headers.get('x-gitbook-search-indexation') ??
-            url.searchParams.has('x-gitbook-search-indexation');
-        if (xGitBookSearchIndexation) {
-            headers.set('x-gitbook-search-indexation', 'true');
-        }
-
-        if (resolved.revision) {
-            headers.set('x-gitbook-content-revision', resolved.revision);
-        }
-        if (resolved.changeRequest) {
-            headers.set('x-gitbook-content-changerequest', resolved.changeRequest);
-        }
-
-        const customization = url.searchParams.get('customization');
-        if (customization) {
-            headers.set('x-gitbook-customization', customization);
-        }
-
-        const theme = url.searchParams.get('theme');
-        if (theme) {
-            headers.set('x-gitbook-theme', theme);
-        }
-
-        if (apiEndpoint) {
-            headers.set('x-gitbook-api', apiEndpoint);
-        }
-
-        const target = new URL(rewritePathname, request.nextUrl.toString());
-        target.search = url.search;
-
-        const response = await withMiddlewareHeadersStorage(async () => {
-            const response = writeCookies(
-                NextResponse.rewrite(target, {
-                    request: {
-                        headers,
-                    },
-                }),
-                resolved.cookies,
-            );
-
-            setMiddlewareHeader(response, 'x-gitbook-version', buildVersion());
-
-            // Add Content Security Policy header
-            setMiddlewareHeader(response, 'content-security-policy', csp);
-            // Basic security headers
-            setMiddlewareHeader(response, 'strict-transport-security', 'max-age=31536000');
-            setMiddlewareHeader(response, 'referrer-policy', 'no-referrer-when-downgrade');
-            setMiddlewareHeader(response, 'x-content-type-options', 'nosniff');
-
-            if (typeof resolved.cacheMaxAge === 'number') {
-                const cacheControl = `public, max-age=0, s-maxage=${resolved.cacheMaxAge}, stale-if-error=0`;
-
-                if (
-                    process.env.GITBOOK_OUTPUT_CACHE === 'true' &&
-                    process.env.NODE_ENV !== 'development'
-                ) {
-                    setMiddlewareHeader(response, 'cache-control', cacheControl);
-                    setMiddlewareHeader(response, 'Cloudflare-CDN-Cache-Control', cacheControl);
-                } else {
-                    setMiddlewareHeader(response, 'x-gitbook-cache-control', cacheControl);
-                }
-            }
-
-            if (resolved.cacheTags && resolved.cacheTags.length > 0) {
-                const headerCacheTag = resolved.cacheTags.join(',');
-                setMiddlewareHeader(response, 'cache-tag', headerCacheTag);
-                setMiddlewareHeader(response, 'x-gitbook-cache-tag', headerCacheTag);
-            }
-
-            await next();
-            return response;
         });
+    }
 
-        ctx.res.headers ||= {};
-        for (const [name, value] of response.headers.entries()) {
-            ctx.res.headers[name] = value;
+    if ('redirect' in resolved) {
+        console.log(`redirecting (${resolved.target}) to ${resolved.redirect}`);
+        return writeCookies(NextResponse.redirect(resolved.redirect), resolved.cookies);
+    }
+
+    // Make sure the URL is clean of any va token after a successful lookup
+    // The token is stored in a cookie that is set on the redirect response
+    const normalizedVA = normalizeVisitorAuthURL(normalized);
+    if (normalizedVA.toString() !== normalized.toString()) {
+        console.log(`redirecting to ${normalizedVA.toString()}`);
+        return writeCookies(NextResponse.redirect(normalizedVA.toString()), resolved.cookies);
+    }
+
+    // setTag('space', resolved.space);
+    // setContext('content', {
+    //     space: resolved.space,
+    //     changeRequest: resolved.changeRequest,
+    //     revision: resolved.revision,
+    //     ...('site' in resolved ? { site: resolved.site, siteSpace: resolved.siteSpace } : {}),
+    // });
+
+    // Because of how Next will encode, we need to encode ourselves the pathname before rewriting to it.
+    const rewritePathname = normalizePathname(encodePathname(resolved.pathname));
+
+    console.log(`${request.method} (${resolved.space}) ${rewritePathname}`);
+
+    // Resolution might have changed the API endpoint
+    apiEndpoint = resolved.apiEndpoint ?? apiEndpoint;
+
+    const contextId = 'site' in resolved ? resolved.contextId : undefined;
+    const nonce = createContentSecurityPolicyNonce();
+    const csp = await withAPI(
+        {
+            client: new GitBookAPI({
+                endpoint: apiEndpoint,
+                authToken: resolved.apiToken,
+                userAgent: userAgent(),
+            }),
+            contextId,
+        },
+        async () => {
+            const [siteData] = await Promise.all([
+                'site' in resolved
+                    ? getSiteData({
+                          organizationId: resolved.organization,
+                          siteId: resolved.site,
+                          siteSectionId: resolved.siteSection,
+                          siteSpaceId: resolved.siteSpace,
+                          siteShareKey: resolved.shareKey,
+                      })
+                    : null,
+                // Start fetching everything as soon as possible, but do not block the middleware on it
+                // the cache will handle concurrent calls
+                waitUntil(
+                    getSpaceContentData(
+                        {
+                            spaceId: resolved.space,
+                            changeRequestId: resolved.changeRequest,
+                            revisionId: resolved.revision,
+                        },
+                        'site' in resolved ? resolved.shareKey : undefined,
+                    ),
+                ),
+            ]);
+
+            const scripts = siteData?.scripts ?? [];
+            return getContentSecurityPolicy(scripts, nonce);
+        },
+    );
+
+    const headers = new Headers(request.headers);
+    // https://nextjs.org/docs/app/building-your-application/configuring/content-security-policy
+    headers.set('x-nonce', nonce);
+    headers.set('content-security-policy', csp);
+    // Pass a x-forwarded-host and origin to ensure Next doesn't block server actions when proxied
+    headers.set('x-forwarded-host', inputURL.host);
+    headers.set('origin', inputURL.origin);
+    headers.set('x-gitbook-token', resolved.apiToken);
+    if (contextId) {
+        headers.set('x-gitbook-token-context', contextId);
+    }
+    headers.set('x-gitbook-mode', mode);
+    headers.set('x-gitbook-origin-basepath', originBasePath);
+    headers.set(
+        'x-gitbook-basepath',
+        mode === 'proxy' ? originBasePath : joinPath(originBasePath, resolved.basePath),
+    );
+    headers.set('x-gitbook-content-space', resolved.space);
+    if ('site' in resolved) {
+        headers.set('x-gitbook-content-organization', resolved.organization);
+        headers.set('x-gitbook-content-site', resolved.site);
+        if (resolved.siteSection) {
+            headers.set('x-gitbook-content-site-section', resolved.siteSection);
         }
-    };
-};
+        if (resolved.siteSpace) {
+            headers.set('x-gitbook-content-site-space', resolved.siteSpace);
+        }
+        if (resolved.shareKey) {
+            headers.set('x-gitbook-content-site-share-key', resolved.shareKey);
+        }
+    }
 
-export default gitbookMiddleware;
+    // For tests, we make it possible to enable search indexation
+    // using a query parameter.
+    const xGitBookSearchIndexation =
+        headers.get('x-gitbook-search-indexation') ??
+        url.searchParams.has('x-gitbook-search-indexation');
+    if (xGitBookSearchIndexation) {
+        headers.set('x-gitbook-search-indexation', 'true');
+    }
+
+    if (resolved.revision) {
+        headers.set('x-gitbook-content-revision', resolved.revision);
+    }
+    if (resolved.changeRequest) {
+        headers.set('x-gitbook-content-changerequest', resolved.changeRequest);
+    }
+
+    const customization = url.searchParams.get('customization');
+    if (customization) {
+        headers.set('x-gitbook-customization', customization);
+    }
+
+    const theme = url.searchParams.get('theme');
+    if (theme) {
+        headers.set('x-gitbook-theme', theme);
+    }
+
+    if (apiEndpoint) {
+        headers.set('x-gitbook-api', apiEndpoint);
+    }
+
+    const target = new URL(rewritePathname, request.nextUrl.toString());
+    target.search = url.search;
+
+    const response = writeCookies(
+        NextResponse.rewrite(target, {
+            request: {
+                headers,
+            },
+        }),
+        resolved.cookies,
+    );
+
+    setMiddlewareHeader(response, 'x-gitbook-version', buildVersion());
+
+    // Add Content Security Policy header
+    setMiddlewareHeader(response, 'content-security-policy', csp);
+    // Basic security headers
+    setMiddlewareHeader(response, 'strict-transport-security', 'max-age=31536000');
+    setMiddlewareHeader(response, 'referrer-policy', 'no-referrer-when-downgrade');
+    setMiddlewareHeader(response, 'x-content-type-options', 'nosniff');
+
+    if (typeof resolved.cacheMaxAge === 'number') {
+        const cacheControl = `public, max-age=0, s-maxage=${resolved.cacheMaxAge}, stale-if-error=0`;
+
+        if (process.env.GITBOOK_OUTPUT_CACHE === 'true' && process.env.NODE_ENV !== 'development') {
+            setMiddlewareHeader(response, 'cache-control', cacheControl);
+            setMiddlewareHeader(response, 'Cloudflare-CDN-Cache-Control', cacheControl);
+        } else {
+            setMiddlewareHeader(response, 'x-gitbook-cache-control', cacheControl);
+        }
+    }
+    // }
+
+    if (resolved.cacheTags && resolved.cacheTags.length > 0) {
+        const headerCacheTag = resolved.cacheTags.join(',');
+        setMiddlewareHeader(response, 'cache-tag', headerCacheTag);
+        setMiddlewareHeader(response, 'x-gitbook-cache-tag', headerCacheTag);
+    }
+
+    return response;
+}
 
 /**
  * Compute the input URL the user is trying to access.
  */
-function getInputURL(request: { url: URL; headers: Record<string, string> }): {
+function getInputURL(request: NextRequest): {
     url: URL;
     mode: URLLookupMode;
 } {
@@ -306,18 +334,18 @@ function getInputURL(request: { url: URL; headers: Record<string, string> }): {
 
     // When developing locally using something.localhost:3000, the url only contains http://localhost:3000
     if (url.hostname === 'localhost') {
-        url.host = request.headers['host'] ?? url.hostname;
+        url.host = request.headers.get('host') ?? url.hostname;
     }
 
     // When request is proxied, the host is passed in the x-forwarded-host header
-    const xForwardedHost = request.headers['x-forwarded-host'];
+    const xForwardedHost = request.headers.get('x-forwarded-host');
     if (xForwardedHost) {
         url.port = '';
         url.host = xForwardedHost;
     }
 
     // When request is proxied by the GitBook infrastructure, we always force the mode as 'multi'.
-    const xGitbookHost = request.headers['x-gitbook-host'];
+    const xGitbookHost = request.headers.get('x-gitbook-host');
     if (xGitbookHost) {
         mode = 'multi';
         url.port = '';
@@ -331,7 +359,7 @@ function getInputURL(request: { url: URL; headers: Record<string, string> }): {
 
     // When passing a x-gitbook-site-url header, this URL is used instead of the request URL
     // to determine the site to serve.
-    const xGitbookSite = request.headers['x-gitbook-site-url'];
+    const xGitbookSite = request.headers.get('x-gitbook-site-url');
     if (xGitbookSite) {
         mode = 'proxy';
     }
@@ -339,106 +367,9 @@ function getInputURL(request: { url: URL; headers: Record<string, string> }): {
     return { url, mode };
 }
 
-/**
- * Return the lookup result for content served with visitor auth. It basically disables caching
- * and sets a cookie with the visitor auth token.
- */
-function getLookupResultForVisitorAuth(
-    basePath: string,
-    visitorTokenLookup: VisitorTokenLookup,
-): Partial<LookupResult> {
-    return {
-        // No caching for content served with visitor auth
-        cacheMaxAge: undefined,
-        cacheTags: [],
-        cookies: {
-            /**
-             * If the visitor token has been retrieve from the URL, or if its a VA cookie and the basePath is the same, set it
-             * as a cookie on the response.
-             *
-             * Note that we do not re-store the gitbook-visitor-cookie in another cookie, to maintain a single source of truth.
-             */
-            ...(visitorTokenLookup?.source === 'url' ||
-            (visitorTokenLookup?.source === 'visitor-auth-cookie' &&
-                visitorTokenLookup.basePath === basePath)
-                ? {
-                      [getVisitorAuthCookieName(basePath)]: {
-                          value: getVisitorAuthCookieValue(basePath, visitorTokenLookup.token),
-                          options: {
-                              httpOnly: true,
-                              sameSite: process.env.NODE_ENV === 'production' ? 'none' : undefined,
-                              secure: process.env.NODE_ENV === 'production',
-                              maxAge: 7 * 24 * 60 * 60,
-                          },
-                      },
-                  }
-                : {}),
-        },
-    };
-}
-
-/**
- * Get the default API token for an API endpoint.
- * The default token is configured globally in the instance using `GITBOOK_TOKEN`,
- * but it's scoped to the default API endpoint.
- */
-function getDefaultAPIToken(apiEndpoint: string): string | undefined {
-    const defaultToken = process.env.GITBOOK_TOKEN;
-    if (!defaultToken) {
-        return;
-    }
-
-    if (apiEndpoint !== DEFAULT_API_ENDPOINT) {
-        // The default token is only used for the default API endpoint
-        return;
-    }
-
-    return defaultToken;
-}
-
-function joinPath(...parts: string[]): string {
-    return parts.join('/').replace(/\/+/g, '/');
-}
-
-function stripBasePath(pathname: string, basePath: string): string {
-    if (basePath === '') {
-        return pathname;
-    }
-
-    if (!pathname.startsWith(basePath)) {
-        throw new Error(`Invalid pathname ${pathname} for basePath ${basePath}`);
-    }
-
-    pathname = pathname.slice(basePath.length);
-    if (!pathname.startsWith('/')) {
-        pathname = '/' + pathname;
-    }
-
-    return pathname;
-}
-
-function stripURLBasePath(url: URL, basePath: string): URL {
-    const stripped = new URL(url.toString());
-    stripped.pathname = stripBasePath(stripped.pathname, basePath);
-    return stripped;
-}
-
-function encodePathname(pathname: string): string {
-    return pathname.split('/').map(encodeURIComponent).join('/');
-}
-
-/** Normalize a pathname to make it start with a slash */
-function normalizePathname(pathname: string): string {
-    if (!pathname.startsWith('/')) {
-        pathname = '/' + pathname;
-    }
-
-    return pathname;
-}
-
 async function lookupSiteForURL(
     mode: URLLookupMode,
-    request: { headers: Record<string, string> },
+    request: NextRequest,
     url: URL,
 ): Promise<LookupResult> {
     switch (mode) {
@@ -493,11 +424,8 @@ async function lookupSiteInSingleMode(url: URL): Promise<LookupResult> {
  * GITBOOK_MODE=proxy
  * When proxying a site on a different base URL.
  */
-async function lookupSiteInProxy(
-    request: { headers: Record<string, string> },
-    url: URL,
-): Promise<LookupResult> {
-    const rawSiteUrl = request.headers['x-gitbook-site-url'];
+async function lookupSiteInProxy(request: NextRequest, url: URL): Promise<LookupResult> {
+    const rawSiteUrl = request.headers.get('x-gitbook-site-url');
     if (!rawSiteUrl) {
         throw new Error(
             `Missing x-gitbook-site-url header. It should be passed when using GITBOOK_MODE=proxy.`,
@@ -514,10 +442,7 @@ async function lookupSiteInProxy(
  * GITBOOK_MODE=multi
  * When serving multi spaces based on the current URL.
  */
-async function lookupSiteInMultiMode(
-    request: { headers: Record<string, string> },
-    url: URL,
-): Promise<LookupResult> {
+async function lookupSiteInMultiMode(request: NextRequest, url: URL): Promise<LookupResult> {
     const visitorAuthToken = getVisitorToken(request, url);
     const lookup = await lookupSiteByAPI(url, visitorAuthToken);
     return {
@@ -538,7 +463,7 @@ async function lookupSiteInMultiMode(
  *   - /~space|~site/:id/~revisions/:revisionId/:path
  */
 async function lookupSiteOrSpaceInMultiIdMode(
-    request: { headers: Record<string, string> },
+    request: NextRequest,
     url: URL,
 ): Promise<LookupResult> {
     const basePathParts: string[] = [];
@@ -684,10 +609,7 @@ async function lookupSiteOrSpaceInMultiIdMode(
  * GITBOOK_MODE=multi-path
  * When serving multi spaces with the url passed in the path.
  */
-async function lookupSiteInMultiPathMode(
-    request: { headers: Record<string, string> },
-    url: URL,
-): Promise<LookupResult> {
+async function lookupSiteInMultiPathMode(request: NextRequest, url: URL): Promise<LookupResult> {
     // Skip useless requests
     if (
         url.pathname === '/favicon.ico' ||
@@ -873,7 +795,158 @@ async function lookupSiteByAPI(
     );
 }
 
-function stringToStream(str: string): ReadableStream {
+/**
+ * Return the lookup result for content served with visitor auth. It basically disables caching
+ * and sets a cookie with the visitor auth token.
+ */
+function getLookupResultForVisitorAuth(
+    basePath: string,
+    visitorTokenLookup: VisitorTokenLookup,
+): Partial<LookupResult> {
+    return {
+        // No caching for content served with visitor auth
+        cacheMaxAge: undefined,
+        cacheTags: [],
+        cookies: {
+            /**
+             * If the visitor token has been retrieve from the URL, or if its a VA cookie and the basePath is the same, set it
+             * as a cookie on the response.
+             *
+             * Note that we do not re-store the gitbook-visitor-cookie in another cookie, to maintain a single source of truth.
+             */
+            ...(visitorTokenLookup?.source === 'url' ||
+            (visitorTokenLookup?.source === 'visitor-auth-cookie' &&
+                visitorTokenLookup.basePath === basePath)
+                ? {
+                      [getVisitorAuthCookieName(basePath)]: {
+                          value: getVisitorAuthCookieValue(basePath, visitorTokenLookup.token),
+                          options: {
+                              httpOnly: true,
+                              sameSite: process.env.NODE_ENV === 'production' ? 'none' : undefined,
+                              secure: process.env.NODE_ENV === 'production',
+                              maxAge: 7 * 24 * 60 * 60,
+                          },
+                      },
+                  }
+                : {}),
+        },
+    };
+}
+
+/**
+ * Get the default API token for an API endpoint.
+ * The default token is configured globally in the instance using `GITBOOK_TOKEN`,
+ * but it's scoped to the default API endpoint.
+ */
+function getDefaultAPIToken(apiEndpoint: string): string | undefined {
+    const defaultToken = process.env.GITBOOK_TOKEN;
+    if (!defaultToken) {
+        return;
+    }
+
+    if (apiEndpoint !== DEFAULT_API_ENDPOINT) {
+        // The default token is only used for the default API endpoint
+        return;
+    }
+
+    return defaultToken;
+}
+
+function joinPath(...parts: string[]): string {
+    return parts.join('/').replace(/\/+/g, '/');
+}
+
+function stripBasePath(pathname: string, basePath: string): string {
+    if (basePath === '') {
+        return pathname;
+    }
+
+    if (!pathname.startsWith(basePath)) {
+        throw new Error(`Invalid pathname ${pathname} for basePath ${basePath}`);
+    }
+
+    pathname = pathname.slice(basePath.length);
+    if (!pathname.startsWith('/')) {
+        pathname = '/' + pathname;
+    }
+
+    return pathname;
+}
+
+function stripURLBasePath(url: URL, basePath: string): URL {
+    const stripped = new URL(url.toString());
+    stripped.pathname = stripBasePath(stripped.pathname, basePath);
+    return stripped;
+}
+
+/** Normalize a pathname to make it start with a slash */
+function normalizePathname(pathname: string): string {
+    if (!pathname.startsWith('/')) {
+        pathname = '/' + pathname;
+    }
+
+    return pathname;
+}
+
+function stripURLSearch(url: URL): URL {
+    const stripped = new URL(url.toString());
+    stripped.search = '';
+    return stripped;
+}
+
+function encodePathname(pathname: string): string {
+    return pathname.split('/').map(encodeURIComponent).join('/');
+}
+
+function decodeGitBookTokenCookie(
+    sourceId: string,
+    cookie: string | undefined,
+): { apiToken: string; apiEndpoint: string | undefined } | undefined {
+    if (!cookie) {
+        return;
+    }
+
+    try {
+        const parsed = JSON.parse(cookie);
+        if (typeof parsed.t === 'string' && parsed.s === sourceId) {
+            return {
+                apiToken: parsed.t,
+                apiEndpoint: typeof parsed.e === 'string' ? parsed.e : undefined,
+            };
+        }
+    } catch (error) {
+        // ignore
+    }
+}
+
+function encodeGitBookTokenCookie(
+    spaceId: string,
+    token: string,
+    apiEndpoint: string | undefined,
+): string {
+    return JSON.stringify({ s: spaceId, t: token, e: apiEndpoint });
+}
+
+function writeCookies<R extends NextResponse>(
+    response: R,
+    cookies: Record<
+        string,
+        {
+            value: string;
+            options?: Partial<ResponseCookie>;
+        }
+    > = {},
+): R {
+    Object.entries(cookies).forEach(([key, { value, options }]) => {
+        response.cookies.set(key, value, options);
+    });
+
+    return response;
+}
+
+// --------------------------------------------------
+
+const stringToStream = (str: string): ReadableStream => {
     const encoder = new TextEncoder();
     return new ReadableStream({
         start(controller) {
@@ -881,4 +954,92 @@ function stringToStream(str: string): ReadableStream {
             controller.close();
         },
     });
+};
+
+class RequestCookie {}
+
+class ResponseCookie {}
+
+export class NextRequest {
+    method: string;
+    url: URL;
+    nextUrl: URL;
+    headers: Headers;
+    cookies: RequestCookie;
+
+    constructor(init: { method: string; url: URL; headers: Record<string, string> }) {
+        this.method = init.method;
+        this.url = init.url;
+        this.nextUrl = init.url;
+        this.headers = new Headers(init.headers);
+    }
 }
+
+class NextResponse {
+    status: number | undefined;
+    body: string | undefined;
+    headers: Headers;
+    cookies: ResponseCookie;
+    reqUrl: URL | undefined;
+    reqHeaders: Headers | undefined;
+
+    constructor(body?: string, init?: { status?: number; headers?: Record<string, string> }) {
+        this.body = body;
+        this.status = init?.status;
+        this.headers = new Headers(init?.headers);
+    }
+
+    static redirect(url: string, status: number = 307): NextResponse {
+        return new NextResponse(`${status}`, {
+            status,
+            headers: {
+                location: url,
+            },
+        });
+    }
+
+    static rewrite(url: URL, init: { request: { headers: Headers } }): NextResponse {
+        const response = new NextResponse();
+        response.reqUrl = url;
+        response.reqHeaders = init.request.headers;
+        return response;
+    }
+}
+
+const gitbookMiddleware: Middleware = () => {
+    return async (ctx, next) => {
+        await withMiddlewareHeadersStorage(async () => {
+            const reqHeaders = getMiddlewareHeaders();
+            for (const [key, value] of Object.entries(ctx.req.headers)) {
+                reqHeaders.set(key, value);
+            }
+            const request = new NextRequest(ctx.req);
+            const response: NextResponse = await middleware(request);
+            for (const [key, value] of response.headers) {
+                ctx.res.headers ||= {};
+                ctx.res.headers[key] = value;
+            }
+            if (response.status) {
+                ctx.res.status = response.status;
+                if (response.body) {
+                    ctx.res.body = stringToStream(response.body);
+                }
+                return undefined as never;
+            }
+            if (response.reqUrl) {
+                // FIXME waku should support rewriting url
+                (ctx.req as any).url = response.reqUrl;
+            }
+            if (response.reqHeaders) {
+                for (const [key, value] of response.reqHeaders) {
+                    // FIXME waku should support rewriting url
+                    (ctx.req as any).headers[key] = value;
+                }
+            }
+            await next();
+            return undefined as never;
+        });
+    };
+};
+
+export default gitbookMiddleware;

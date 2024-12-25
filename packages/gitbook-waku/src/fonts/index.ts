@@ -1,22 +1,24 @@
 import { CustomizationFont } from '@gitbook/api';
-//import {
-//    Inter,
-//    Fira_Sans_Extra_Condensed,
-//    IBM_Plex_Serif,
-//    IBM_Plex_Mono,
-//    Lato,
-//    Merriweather,
-//    Noto_Sans,
-//    Open_Sans,
-//    Overpass,
-//    Poppins,
-//    Raleway,
-//    Roboto,
-//    Roboto_Slab,
-//    Source_Sans_3,
-//    Ubuntu,
-//} from 'next/font/google';
-//import localFont from 'next/font/local';
+/*
+import {
+    Inter,
+    Fira_Sans_Extra_Condensed,
+    IBM_Plex_Serif,
+    IBM_Plex_Mono,
+    Lato,
+    Merriweather,
+    Noto_Sans,
+    Open_Sans,
+    Overpass,
+    Poppins,
+    Raleway,
+    Roboto,
+    Roboto_Slab,
+    Source_Sans_3,
+    Ubuntu,
+} from 'next/font/google';
+import localFont from 'next/font/local';
+*/
 const localFont = <T extends object>(x: T) => x;
 const Inter = localFont;
 const Fira_Sans_Extra_Condensed = localFont;
