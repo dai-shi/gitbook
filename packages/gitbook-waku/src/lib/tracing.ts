@@ -1,4 +1,4 @@
-import { startSpan } from '@sentry/nextjs';
+// import { startSpan } from '@sentry/nextjs';
 
 export interface TraceSpan {
     setAttribute: (label: string, value: boolean | string | number) => void;
@@ -18,6 +18,11 @@ export async function trace<T>(
     name: string | TraceName,
     fn: (span: TraceSpan) => Promise<T>,
 ): Promise<T> {
+    const span: TraceSpan = {
+        setAttribute() {},
+    };
+    return await fn(span);
+    /*
     const { operation, name: executionName } =
         typeof name === 'string' ? { operation: name, name: undefined } : name;
     const completeName = executionName ? `${operation}(${executionName})` : operation;
@@ -50,6 +55,7 @@ export async function trace<T>(
             }
         },
     );
+    */
 }
 
 /**

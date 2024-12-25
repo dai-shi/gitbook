@@ -1,4 +1,4 @@
-import 'server-only';
+// import 'server-only';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 import {
@@ -19,7 +19,8 @@ import {
     PublishedSiteContent,
 } from '@gitbook/api';
 import assertNever from 'assert-never';
-import { headers } from 'next/headers';
+// import { headers } from 'next/headers';
+import { getMiddlewareHeaders as headers } from './middleware';
 import rison from 'rison';
 import { assert, DeepPartial } from 'ts-essentials';
 
