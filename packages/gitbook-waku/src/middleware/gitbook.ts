@@ -1027,13 +1027,11 @@ const gitbookMiddleware: Middleware = () => {
                 return undefined as never;
             }
             if (response.reqUrl) {
-                // FIXME waku should support rewriting url
-                (ctx.req as any).url = response.reqUrl;
+                ctx.req.url = response.reqUrl;
             }
             if (response.reqHeaders) {
                 for (const [key, value] of response.reqHeaders) {
-                    // FIXME waku should support rewriting url
-                    (ctx.req as any).headers[key] = value;
+                    ctx.req.headers = { ...ctx.req.headers, [key]: value };
                     reqHeaders.set(key, value);
                 }
             }
