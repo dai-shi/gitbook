@@ -105,13 +105,15 @@ export type LookupResult = PublishedContentWithCache & {
 async function middleware(request: NextRequest) {
     const { url, mode } = getInputURL(request);
 
-    // setTag('url', url.toString());
-    // setContext('request', {
-    //     method: request.method,
-    //     url: url.toString(),
-    //     rawRequestURL: request.url,
-    //     userAgent: userAgent(),
-    // });
+    /*
+    setTag('url', url.toString());
+    setContext('request', {
+        method: request.method,
+        url: url.toString(),
+        rawRequestURL: request.url,
+        userAgent: userAgent(),
+    });
+    */
 
     // Redirect to normalize the URL
     const normalized = normalizeURL(url);
@@ -159,13 +161,15 @@ async function middleware(request: NextRequest) {
         return writeCookies(NextResponse.redirect(normalizedVA.toString()), resolved.cookies);
     }
 
-    // setTag('space', resolved.space);
-    // setContext('content', {
-    //     space: resolved.space,
-    //     changeRequest: resolved.changeRequest,
-    //     revision: resolved.revision,
-    //     ...('site' in resolved ? { site: resolved.site, siteSpace: resolved.siteSpace } : {}),
-    // });
+    /*
+    setTag('space', resolved.space);
+    setContext('content', {
+        space: resolved.space,
+        changeRequest: resolved.changeRequest,
+        revision: resolved.revision,
+        ...('site' in resolved ? { site: resolved.site, siteSpace: resolved.siteSpace } : {}),
+    });
+    */
 
     // Because of how Next will encode, we need to encode ourselves the pathname before rewriting to it.
     const rewritePathname = normalizePathname(encodePathname(resolved.pathname));
