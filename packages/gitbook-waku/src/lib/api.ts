@@ -20,7 +20,7 @@ import {
 } from '@gitbook/api';
 import assertNever from 'assert-never';
 // import { headers } from 'next/headers';
-import { getMiddlewareHeaders as headers } from './middleware';
+import { getHeaders as headers } from '../middleware/gitbook';
 import rison from 'rison';
 import { assert, DeepPartial } from 'ts-essentials';
 

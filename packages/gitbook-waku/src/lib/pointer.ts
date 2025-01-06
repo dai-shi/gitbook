@@ -1,5 +1,5 @@
 //import { headers } from 'next/headers';
-import { getMiddlewareHeaders as headers } from './middleware';
+import { getHeaders as headers } from '../middleware/gitbook';
 
 import { SiteContentPointer, SpaceContentPointer } from './api';
 

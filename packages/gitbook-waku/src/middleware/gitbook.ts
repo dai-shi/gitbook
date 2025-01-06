@@ -7,6 +7,7 @@ import jwt from 'jsonwebtoken';
 import hash from 'object-hash';
 
 import type { Middleware } from 'waku/config';
+import { unstable_getHeaders } from 'waku/server';
 
 import {
     PublishedContentWithCache,
@@ -23,13 +24,7 @@ import {
 import { race } from '@/lib/async';
 import { buildVersion } from '@/lib/build';
 import { createContentSecurityPolicyNonce, getContentSecurityPolicy } from '@/lib/csp';
-import {
-    getURLLookupAlternatives,
-    normalizeURL,
-    getMiddlewareHeaders,
-    setMiddlewareHeader,
-    withMiddlewareHeadersStorage,
-} from '@/lib/middleware';
+import { getURLLookupAlternatives, normalizeURL } from '@/lib/middleware';
 import {
     VisitorTokenLookup,
     getVisitorAuthCookieName,
@@ -39,6 +34,10 @@ import {
 } from '@/lib/visitor-token';
 
 import { waitUntil } from '../lib/waitUntil';
+
+function setMiddlewareHeader(response: { headers: Headers }, name: string, value: string) {
+    response.headers.set(name, value);
+}
 
 /*
 export const config = {
@@ -1020,37 +1019,37 @@ class NextResponse {
 
 const gitbookMiddleware: Middleware = () => {
     return async (ctx, next) => {
-        await withMiddlewareHeadersStorage(async () => {
-            const reqHeaders = getMiddlewareHeaders();
-            for (const [key, value] of Object.entries(ctx.req.headers)) {
-                reqHeaders.set(key, value);
+        const request = new NextRequest(ctx.req);
+        const response: NextResponse = await middleware(request);
+        for (const [key, value] of response.headers) {
+            ctx.res.headers ||= {};
+            ctx.res.headers[key] = value;
+        }
+        if (response.status) {
+            ctx.res.status = response.status;
+            if (response.body) {
+                ctx.res.body = stringToStream(response.body);
             }
-            const request = new NextRequest(ctx.req);
-            const response: NextResponse = await middleware(request);
-            for (const [key, value] of response.headers) {
-                ctx.res.headers ||= {};
-                ctx.res.headers[key] = value;
+            return;
+        }
+        if (response.reqUrl) {
+            ctx.req.url = response.reqUrl;
+        }
+        if (response.reqHeaders) {
+            for (const [key, value] of response.reqHeaders) {
+                ctx.req.headers = { ...ctx.req.headers, [key]: value };
             }
-            if (response.status) {
-                ctx.res.status = response.status;
-                if (response.body) {
-                    ctx.res.body = stringToStream(response.body);
-                }
-                return undefined as never;
-            }
-            if (response.reqUrl) {
-                ctx.req.url = response.reqUrl;
-            }
-            if (response.reqHeaders) {
-                for (const [key, value] of response.reqHeaders) {
-                    ctx.req.headers = { ...ctx.req.headers, [key]: value };
-                    reqHeaders.set(key, value);
-                }
-            }
-            await next();
-            return undefined as never;
-        });
+        }
+        await next();
     };
 };
 
 export default gitbookMiddleware;
+
+export function getHeaders() {
+    const headers = new Headers();
+    for (const [key, value] of Object.entries(unstable_getHeaders())) {
+        headers.set(key, value);
+    }
+    return headers;
+}
