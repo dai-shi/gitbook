@@ -293,7 +293,7 @@ async function middleware(request: NextRequest) {
     setMiddlewareHeader(response, 'x-gitbook-version', buildVersion());
 
     // Add Content Security Policy header
-    setMiddlewareHeader(response, 'content-security-policy', csp);
+    //setMiddlewareHeader(response, 'content-security-policy', csp);
     // Basic security headers
     setMiddlewareHeader(response, 'strict-transport-security', 'max-age=31536000');
     setMiddlewareHeader(response, 'referrer-policy', 'no-referrer-when-downgrade');
@@ -1019,6 +1019,14 @@ class NextResponse {
 
 const gitbookMiddleware: Middleware = () => {
     return async (ctx, next) => {
+        if (
+            ['/@', '/src/', '/node_modules/', '/RSC/'].some((prefix) =>
+                ctx.req.url.pathname.startsWith(prefix),
+            )
+        ) {
+            await next();
+            return;
+        }
         const request = new NextRequest(ctx.req);
         const response: NextResponse = await middleware(request);
         for (const [key, value] of response.headers) {
