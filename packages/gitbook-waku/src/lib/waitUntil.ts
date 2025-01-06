@@ -14,7 +14,7 @@ export async function getGlobalContext(): Promise<ExecutionContext | object> {
     }
 
     // We lazy-load the next-on-pages package to avoid errors when running tests because of 'server-only'.
-    const { getOptionalRequestContext } = await import('@cloudflare/next-on-pages');
+    const { getOptionalRequestContext } = { getOptionalRequestContext: () => null as any }; // await import('@cloudflare/next-on-pages');
     return getOptionalRequestContext()?.ctx ?? globalThis;
 }
 
@@ -29,7 +29,7 @@ export async function getRequestContext(): Promise<IncomingRequestCfProperties |
     }
 
     // We lazy-load the next-on-pages package to avoid errors when running tests because of 'server-only'.
-    const { getOptionalRequestContext } = await import('@cloudflare/next-on-pages');
+    const { getOptionalRequestContext } = { getOptionalRequestContext: () => null } as any; // await import('@cloudflare/next-on-pages');
     return getOptionalRequestContext()?.cf ?? globalThis;
 }
 

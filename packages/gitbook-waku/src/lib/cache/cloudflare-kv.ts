@@ -137,7 +137,7 @@ async function getKVNamespace(): Promise<KVNamespace | null> {
     }
 
     // We lazy-load the next-on-pages package to avoid errors when running tests because of 'server-only'.
-    const { getOptionalRequestContext } = await import('@cloudflare/next-on-pages');
+    const { getOptionalRequestContext } = { getOptionalRequestContext: () => null } as any; // await import('@cloudflare/next-on-pages');
 
     const cloudflare = getOptionalRequestContext();
     if (cloudflare) {

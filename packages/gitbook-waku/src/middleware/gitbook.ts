@@ -956,9 +956,19 @@ const stringToStream = (str: string): ReadableStream => {
     });
 };
 
-class RequestCookie {}
+class RequestCookie {
+    get(..._args: any[]): any {
+        return undefined;
+    }
+}
 
-class ResponseCookie {}
+class ResponseCookie {
+    httpOnly: any;
+    maxAge: any;
+    secure: any;
+    sameSite: any;
+    set(..._args: any[]): void {}
+}
 
 export class NextRequest {
     method: string;
@@ -972,6 +982,7 @@ export class NextRequest {
         this.url = init.url;
         this.nextUrl = init.url;
         this.headers = new Headers(init.headers);
+        this.cookies = new RequestCookie();
     }
 }
 
@@ -987,6 +998,7 @@ class NextResponse {
         this.body = body;
         this.status = init?.status;
         this.headers = new Headers(init?.headers);
+        this.cookies = new ResponseCookie();
     }
 
     static redirect(url: string, status: number = 307): NextResponse {
