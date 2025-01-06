@@ -1023,6 +1023,14 @@ class NextResponse {
 
 const gitbookMiddleware: Middleware = () => {
     return async (ctx, next) => {
+        let origUrl: URL | undefined;
+        if (ctx.req.url.pathname.startsWith('/RSC/R/')) {
+            origUrl = ctx.req.url;
+            ctx.req.url = new URL(
+                ctx.req.url.pathname.slice('/RSC/R'.length).replace(/\.txt$/, ''),
+                ctx.req.url,
+            );
+        }
         if (
             ['/@', '/src/', '/node_modules/', '/RSC/'].some((prefix) =>
                 ctx.req.url.pathname.startsWith(prefix),
@@ -1046,6 +1054,9 @@ const gitbookMiddleware: Middleware = () => {
         }
         if (response.reqUrl) {
             ctx.req.url = response.reqUrl;
+        }
+        if (origUrl) {
+            ctx.req.url = origUrl;
         }
         if (response.reqHeaders) {
             for (const [key, value] of response.reqHeaders) {
