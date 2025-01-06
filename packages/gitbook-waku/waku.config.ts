@@ -7,4 +7,13 @@ export default defineConfig({
         import('waku/middleware/dev-server'),
         import('waku/middleware/handler'),
     ],
+    unstable_viteConfigs: {
+        'dev-rsc': () => ({
+            ssr: {
+                optimizeDeps: {
+                    include: ['ts-essentials'],
+                },
+            },
+        }),
+    },
 });

@@ -59,7 +59,7 @@ export default {
         }
         return pages.handleRequest(input, utils);
     },
-    getBuildConfig: (utils: any) => {
-        return pages.getBuildConfig(utils);
+    handleBuild: (utils: any) => {
+        return pages.handleBuild(utils);
     },
 };
