@@ -12,14 +12,14 @@
         "react": "19.0.0",
         "react-dom": "19.0.0",
         "react-server-dom-webpack": "19.0.0",
-        "waku": "0.21.12"
+        "waku": "0.21.13"
     },
     "devDependencies": {
-        "@types/react": "19.0.2",
+        "@types/react": "19.0.3",
         "@types/react-dom": "19.0.2",
         "assert-never": "^1.2.1",
         "server-only": "^0.0.1",
-        "typescript": "^5.7.2",
+        "typescript": "5.7.2",
         "vite": "6.0.6",
         "vite-tsconfig-paths": "5.1.4"
     }
