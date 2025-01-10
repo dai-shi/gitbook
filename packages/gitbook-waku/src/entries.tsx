@@ -5,16 +5,21 @@ import type { PathsForPages } from 'waku/router';
 import SiteCatchAllLoading from './app/(site)/(content)/[[...pathname]]/loading';
 // import SiteCatchAllPage from './app/(site)/(content)/[[...pathname]]/page';
 // import SiteCatchAllNoteFound from './app/(site)/(content)/[[...pathname]]/not-found';
-// import SiteContentLayout from './app/(site)/(content)/layout';
+import SiteContentLayout from './app/(site)/(content)/layout';
 import SiteLayout from './app/(site)/layout';
 // import SiteError from './app/(site)/error';
 // import SiteFetch from './app/(site)/fetch';
 
-const pages = createPages(async ({ createPage, createLayout }) => [
+const pages = createPages(async ({ createPage, createLayout, createRoot }) => [
+    createRoot({
+        render: 'dynamic',
+        component: ({ children }) => <SiteLayout>{children}</SiteLayout>,
+    }),
+
     createLayout({
         render: 'dynamic',
         path: '/',
-        component: ({ children }) => <SiteLayout>{children}</SiteLayout>,
+        component: ({ children }) => <SiteContentLayout>{children}</SiteContentLayout>,
     }),
 
     createPage({
