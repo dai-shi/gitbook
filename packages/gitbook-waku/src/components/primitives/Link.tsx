@@ -1,6 +1,8 @@
 'use client';
 
-import NextLink, { LinkProps as NextLinkProps } from 'next/link';
+// import NextLink, { LinkProps as NextLinkProps } from 'next/link';
+import type { LinkProps as NextLinkProps } from 'next/link';
+import { Link as WakuLink } from 'waku';
 import React from 'react';
 
 // Props from Next, which includes NextLinkProps and all the things anchor elements support.
@@ -21,6 +23,10 @@ export const Link = React.forwardRef(function Link(
     ref: React.Ref<HTMLAnchorElement>,
 ) {
     const { href, prefetch, children, ...domProps } = props;
+    if ('linkStyle' in domProps) {
+      console.warn('FIXME: Link does not support linkStyle:', domProps.linkStyle);
+      delete domProps.linkStyle;
+    }
 
     // Use a real anchor tag for external links,s and a Next.js Link for internal links.
     // If we use a NextLink for external links, Nextjs won't rerender the top-level layouts.
@@ -33,9 +39,15 @@ export const Link = React.forwardRef(function Link(
         );
     }
 
+    if (ref) {
+        throw new Error('WakuLink does not support refs yet');
+    }
+    if (prefetch) {
+        throw new Error('WakuLink does not support prefetch yet');
+    }
     return (
-        <NextLink ref={ref} {...props}>
+        <WakuLink to={href.toString() as any} {...domProps}>
             {children}
-        </NextLink>
+        </WakuLink>
     );
 });

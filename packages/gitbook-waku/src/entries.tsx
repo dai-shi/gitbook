@@ -13,13 +13,13 @@ import SiteLayout from './app/(site)/layout';
 const pages = createPages(async ({ createPage, createLayout, createRoot }) => [
     createRoot({
         render: 'dynamic',
-        component: ({ children }) => <SiteLayout>{children}</SiteLayout>,
+        component: SiteLayout,
     }),
 
     createLayout({
         render: 'dynamic',
         path: '/',
-        component: ({ children }) => <SiteContentLayout>{children}</SiteContentLayout>,
+        component: SiteContentLayout,
     }),
 
     createPage({

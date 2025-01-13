@@ -1,6 +1,7 @@
 import { CustomizationThemeMode } from '@gitbook/api';
-import { Metadata, Viewport } from 'next';
-import { headers } from 'next/headers';
+import type { Metadata, Viewport } from 'next';
+//import { headers } from 'next/headers';
+import { getHeaders as headers } from '../../../middleware/gitbook';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import React from 'react';
 import * as ReactDOM from 'react-dom';
@@ -43,6 +44,7 @@ export default async function ContentLayout(props: { children: React.ReactNode }
         sections,
     } = await fetchContentData();
 
+    /*
     ReactDOM.preconnect(api().client.endpoint);
     if (assetsDomain) {
         ReactDOM.preconnect(assetsDomain);
@@ -54,6 +56,7 @@ export default async function ContentLayout(props: { children: React.ReactNode }
             nonce,
         });
     });
+    */
 
     return (
         <NuqsAdapter>

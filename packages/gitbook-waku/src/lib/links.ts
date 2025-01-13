@@ -6,7 +6,8 @@ import {
     RevisionPageGroup,
     RevisionPageType,
 } from '@gitbook/api';
-import { headers } from 'next/headers';
+//import { headers } from 'next/headers';
+import { getHeaders as headers } from '../middleware/gitbook';
 
 import { getPagePath } from './pages';
 

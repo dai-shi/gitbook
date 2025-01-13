@@ -1,6 +1,7 @@
 import { SpaceIntegrationScript } from '@gitbook/api';
 import { merge } from 'content-security-policy-merger';
-import { headers } from 'next/headers';
+//import { headers } from 'next/headers';
+import { getHeaders as headers } from '../middleware/gitbook';
 
 import { assetsDomain } from './assets';
 import { filterOutNullable } from './typescript';

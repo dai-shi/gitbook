@@ -219,12 +219,14 @@ function ImagePictureSized(
 
     // Preload the image if needed.
     if (fetchPriority === 'high' || preload) {
+        /*
         ReactDOM.preload(attrs.src, {
             as: 'image',
             imageSrcSet: attrs.srcSet,
             imageSizes: attrs.sizes,
             fetchPriority,
         });
+        */
     }
 
     const imgProps: ImgDOMPropsWithSrc = {
