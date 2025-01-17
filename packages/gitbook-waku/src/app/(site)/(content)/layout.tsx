@@ -44,7 +44,6 @@ export default async function ContentLayout(props: { children: React.ReactNode }
         sections,
     } = await fetchContentData();
 
-    /*
     ReactDOM.preconnect(api().client.endpoint);
     if (assetsDomain) {
         ReactDOM.preconnect(assetsDomain);
@@ -56,7 +55,6 @@ export default async function ContentLayout(props: { children: React.ReactNode }
             nonce,
         });
     });
-    */
 
     return (
         <NuqsAdapter>
