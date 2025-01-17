@@ -12,10 +12,10 @@
         "react": "19.0.0",
         "react-dom": "19.0.0",
         "react-server-dom-webpack": "19.0.0",
-        "waku": "0.21.14"
+        "waku": "0.21.15"
     },
     "devDependencies": {
-        "@types/react": "19.0.5",
+        "@types/react": "19.0.7",
         "@types/react-dom": "19.0.3",
         "assert-never": "^1.2.1",
         "server-only": "^0.0.1",
