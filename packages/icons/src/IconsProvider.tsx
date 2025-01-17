@@ -19,9 +19,13 @@ export type IconsContextType = Partial<IconsAssetsLocation> & {
     iconStyle: IconStyle;
 };
 
-const IconsContext = React.createContext<IconsContextType>({
+const IconsContext = ((
+    globalThis as {
+        TEMP_HACK_ICONS_CONTEXT?: React.Context<IconsContextType>;
+    }
+).TEMP_HACK_ICONS_CONTEXT ||= React.createContext<IconsContextType>({
     iconStyle: IconStyle.Regular,
-});
+}));
 
 /**
  * Provider to control the loading of icons.
