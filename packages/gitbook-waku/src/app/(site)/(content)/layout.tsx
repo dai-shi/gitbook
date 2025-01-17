@@ -2,7 +2,9 @@ import { CustomizationThemeMode } from '@gitbook/api';
 import type { Metadata, Viewport } from 'next';
 //import { headers } from 'next/headers';
 import { getHeaders as headers } from '../../../middleware/gitbook';
-import { NuqsAdapter } from 'nuqs/adapters/next/app';
+//import { NuqsAdapter } from 'nuqs/adapters/next/app';
+// Does this work?
+//import { NuqsAdapter } from 'nuqs/adapters/react';
 import React from 'react';
 import * as ReactDOM from 'react-dom';
 
@@ -23,6 +25,10 @@ import { RocketLoaderDetector } from './RocketLoaderDetector';
 import { fetchContentData } from '../fetch';
 
 export const runtime = 'edge';
+
+const NuqsAdapter = ({ children }: { children: React.ReactNode }) => {
+    return <>{children}</>;
+};
 
 /**
  * Layout when rendering the content.
