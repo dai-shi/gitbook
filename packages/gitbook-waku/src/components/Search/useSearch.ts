@@ -1,4 +1,4 @@
-import { useQueryStates, parseAsBoolean, parseAsString, UseQueryStatesOptions } from 'nuqs';
+//import { useQueryStates, parseAsBoolean, parseAsString, UseQueryStatesOptions } from 'nuqs';
 import React from 'react';
 
 import { LinkProps } from '../primitives';
@@ -10,11 +10,11 @@ export interface SearchState {
 }
 
 // KeyMap needs to be statically defined to avoid `setRawState` being redefined on every render.
-const keyMap = {
-    q: parseAsString,
-    ask: parseAsBoolean,
-    global: parseAsBoolean,
-};
+//const keyMap = {
+//    q: parseAsString,
+//    ask: parseAsBoolean,
+//    global: parseAsBoolean,
+//};
 
 export type UpdateSearchState = (
     update: React.SetStateAction<SearchState | null>,
@@ -24,9 +24,14 @@ export type UpdateSearchState = (
  * Hook to access the current search query and update it.
  */
 export function useSearch(): [SearchState | null, UpdateSearchState] {
-    const [rawState, setRawState] = useQueryStates(keyMap, {
-        history: 'replace',
-    });
+    //const [rawState, setRawState] = useQueryStates(keyMap, {
+    //    history: 'replace',
+    //});
+    const [rawState, setRawState] = React.useState<{
+        q: string | null;
+        ask: true | null;
+        global: true | null;
+    }>({ q: '', ask: null, global: null });
 
     const state = React.useMemo<SearchState | null>(() => {
         if (rawState === null || rawState.q === null) {
@@ -50,18 +55,19 @@ export function useSearch(): [SearchState | null, UpdateSearchState] {
             }
 
             if (update === null) {
-                return setRawState({
+                setRawState({
                     q: null,
                     ask: null,
                     global: null,
                 });
             } else {
-                return setRawState({
+                setRawState({
                     q: update.query,
                     ask: update.ask ? true : null,
                     global: update.global ? true : null,
                 });
             }
+            return Promise.resolve(new URLSearchParams());
         },
         [setRawState],
     );
