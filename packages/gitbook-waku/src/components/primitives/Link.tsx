@@ -39,14 +39,11 @@ export const Link = React.forwardRef(function Link(
         );
     }
 
-    if (ref) {
-        throw new Error('WakuLink does not support refs yet');
-    }
     if (prefetch) {
         throw new Error('WakuLink does not support prefetch yet');
     }
     return (
-        <WakuLink to={href.toString() as any} {...domProps}>
+        <WakuLink ref={ref} to={href.toString() as any} {...domProps}>
             {children}
         </WakuLink>
     );
