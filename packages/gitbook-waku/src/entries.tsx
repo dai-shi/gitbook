@@ -3,7 +3,7 @@ import { createPages } from 'waku';
 import type { PathsForPages } from 'waku/router';
 
 import SiteCatchAllLoading from './app/(site)/(content)/[[...pathname]]/loading';
-// import SiteCatchAllPage from './app/(site)/(content)/[[...pathname]]/page';
+import SiteCatchAllPage from './app/(site)/(content)/[[...pathname]]/page';
 // import SiteCatchAllNoteFound from './app/(site)/(content)/[[...pathname]]/not-found';
 import SiteContentLayout from './app/(site)/(content)/layout';
 import SiteLayout from './app/(site)/layout';
@@ -27,22 +27,10 @@ const pages = createPages(async ({ createPage, createLayout, createRoot }) => [
         path: '/[...pathname]',
         component: ({ pathname }) => (
             <Suspense fallback={<SiteCatchAllLoading />}>
-                <h1>Hello GitBook-Waku</h1>
-                <p>/{pathname.join('/')}</p>
-            </Suspense>
-        ),
-    }),
-    /*
-    createPage({
-        render: 'dynamic',
-        path: '/[...pathname]',
-        component: ({ pathname }) => (
-            <Suspense fallback={<SiteCatchAllLoading />}>
                 <SiteCatchAllPage params={{ pathname }} searchParams={{}} />
             </Suspense>
         ),
     }),
-    */
 ]);
 
 declare module 'waku/router' {
