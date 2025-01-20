@@ -5,7 +5,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import React from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
-import { useRecoilValue } from 'recoil';
+//import { useRecoilValue } from 'recoil';
+import { useAtomValue as useRecoilValue } from 'jotai';
 
 import { tString, useLanguage } from '@/intl/client';
 import { SiteContentPointer } from '@/lib/api';

@@ -1,7 +1,9 @@
 'use client';
 
 import React from 'react';
-import { atom, selectorFamily, useRecoilValue, useSetRecoilState } from 'recoil';
+//import { atom, selectorFamily, useRecoilValue, useSetRecoilState } from 'recoil';
+import { atom, useAtomValue as useRecoilValue, useSetAtom as useSetRecoilState } from 'jotai';
+import { atomFamily } from 'jotai/utils';
 
 import { useHash, useIsMounted } from '@/components/hooks';
 import { ClassValue, tcls } from '@/lib/tailwind';
@@ -220,43 +222,56 @@ export function DynamicTabs(
     );
 }
 
+//const tabsAtom = atom<TabsState>({
+//    key: 'tabsAtom',
+//    default: {
+//        activeIds: {},
+//        activeTitles: [],
+//    },
+//    effects: [
+//        // Persist the state to local storage
+//        ({ trigger, setSelf, onSet }) => {
+//            if (typeof localStorage === 'undefined') {
+//                return;
+//            }
+//
+//            const localStorageKey = '@gitbook/tabsState';
+//            if (trigger === 'get') {
+//                const stored = localStorage.getItem(localStorageKey);
+//                if (stored) {
+//                    setSelf(JSON.parse(stored));
+//                }
+//            }
+//
+//            onSet((newState) => {
+//                localStorage.setItem(localStorageKey, JSON.stringify(newState));
+//            });
+//        },
+//    ],
+//});
+// TODO no storage support yet
 const tabsAtom = atom<TabsState>({
-    key: 'tabsAtom',
-    default: {
-        activeIds: {},
-        activeTitles: [],
-    },
-    effects: [
-        // Persist the state to local storage
-        ({ trigger, setSelf, onSet }) => {
-            if (typeof localStorage === 'undefined') {
-                return;
-            }
-
-            const localStorageKey = '@gitbook/tabsState';
-            if (trigger === 'get') {
-                const stored = localStorage.getItem(localStorageKey);
-                if (stored) {
-                    setSelf(JSON.parse(stored));
-                }
-            }
-
-            onSet((newState) => {
-                localStorage.setItem(localStorageKey, JSON.stringify(newState));
-            });
-        },
-    ],
+    activeIds: {},
+    activeTitles: [],
 });
 
-const tabsActiveSelector = selectorFamily<TabsItem, SelectorMapper<TabsInput>>({
-    key: 'tabsActiveSelector',
-    get:
-        (input) =>
-        ({ get }) => {
+//const tabsActiveSelector = selectorFamily<TabsItem, SelectorMapper<TabsInput>>({
+//    key: 'tabsActiveSelector',
+//    get:
+//        (input) =>
+//        ({ get }) => {
+//            const state = get(tabsAtom);
+//            return getTabBySelection(input, state) ?? getTabByTitle(input, state) ?? input.tabs[0];
+//        },
+//});
+const tabsActiveSelector = atomFamily(
+    (input: SelectorMapper<TabsInput>) =>
+        atom((get) => {
             const state = get(tabsAtom);
             return getTabBySelection(input, state) ?? getTabByTitle(input, state) ?? input.tabs[0];
-        },
-});
+        }),
+    (a, b) => JSON.stringify(a) === JSON.stringify(b),
+);
 
 /**
  * Get the ID for a tab button.

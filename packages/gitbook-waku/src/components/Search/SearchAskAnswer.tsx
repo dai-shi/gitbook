@@ -2,7 +2,8 @@
 
 import { Icon } from '@gitbook/icons';
 import React from 'react';
-import { atom, useRecoilState } from 'recoil';
+//import { atom, useRecoilState } from 'recoil';
+import { atom as jotaiAtom, useAtom as useRecoilState } from 'jotai';
 
 import { Loading } from '@/components/primitives';
 import { useLanguage } from '@/intl/client';
@@ -15,6 +16,8 @@ import { tcls } from '@/lib/tailwind';
 import { AskAnswerResult, AskAnswerSource, streamAskQuestion } from './server-actions';
 import { useSearch, useSearchLink } from './useSearch';
 import { Link } from '../primitives';
+
+const atom = <T extends unknown>(init: { key: string; default: T }) => jotaiAtom(init.default);
 
 type SearchState =
     | {

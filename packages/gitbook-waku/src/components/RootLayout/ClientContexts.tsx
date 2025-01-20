@@ -1,7 +1,8 @@
 'use client';
 
 import React from 'react';
-import { RecoilRoot } from 'recoil';
+//import { RecoilRoot } from 'recoil';
+import { Provider as RecoilRoot } from 'jotai';
 
 import { TranslateContext } from '@/intl/client';
 import { TranslationLanguage } from '@/intl/translations';
