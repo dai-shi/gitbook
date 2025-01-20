@@ -6,7 +6,10 @@
     "scripts": {
         "dev": "waku dev --port 3001",
         "build": "waku build",
-        "start": "waku start"
+        "start": "waku start",
+        "generate": "gitbook-icons ./public/~gitbook/static/icons custom-icons && gitbook-math ./public/~gitbook/static/math",
+        "copy:icons": "gitbook-icons ./public/~gitbook/static/icons",
+        "clean": "rm -rf ./public/~gitbook/static"
     },
     "dependencies": {
         "jotai": "2.11.0",

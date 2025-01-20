@@ -1024,6 +1024,10 @@ class NextResponse {
 const gitbookMiddleware: Middleware = () => {
     return async (ctx, next) => {
         let origUrl: URL | undefined;
+        if (ctx.req.url.pathname.startsWith('/~gitbook/')) {
+          await next();
+          return;
+        }
         if (ctx.req.url.pathname.startsWith('/RSC/R/')) {
             origUrl = ctx.req.url;
             ctx.req.url = new URL(
