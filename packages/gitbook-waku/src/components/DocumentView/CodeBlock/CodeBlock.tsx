@@ -3,7 +3,7 @@ import { DocumentBlockCode, JSONDocument } from '@gitbook/api';
 import { tcls } from '@/lib/tailwind';
 
 import { CopyCodeButton } from './CopyCodeButton';
-import { highlight, HighlightLine, HighlightToken, plainHighlighting } from './highlight';
+//import { highlight, HighlightLine, HighlightToken, plainHighlighting } from './highlight';
 import { BlockProps } from '../Block';
 import { DocumentContext } from '../DocumentView';
 import { Inline } from '../Inline';
@@ -14,6 +14,8 @@ import './theme.css';
  * Render an entire code-block. The syntax highlighting is done server-side.
  */
 export async function CodeBlock(props: BlockProps<DocumentBlockCode>) {
+    return <div>CodeBlock Unsupported</div>;
+    /*
     const { block, document, style, context } = props;
     const lines = await highlight(block);
 
@@ -133,6 +135,7 @@ export async function CodeBlock(props: BlockProps<DocumentBlockCode>) {
             </pre>
         </div>
     );
+    */
 }
 
 function CodeHighlightLine(props: {
