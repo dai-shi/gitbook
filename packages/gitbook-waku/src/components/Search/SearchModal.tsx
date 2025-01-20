@@ -2,7 +2,8 @@
 
 import { Icon } from '@gitbook/icons';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useRouter } from 'next/navigation';
+//import { useRouter } from 'next/navigation';
+import { useRouter_UNSTABLE as useRouter } from 'waku';
 import React from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 //import { useRecoilValue } from 'recoil';
@@ -59,7 +60,7 @@ export function SearchModal(props: SearchModalProps) {
     const onClose = async (to?: string) => {
         await setSearchState(null);
         if (to) {
-            router.push(to);
+            router.push(to as never);
         }
     };
 
